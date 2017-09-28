@@ -1,16 +1,32 @@
 object Main extends App {
 
 	sealed trait Entity {
-		def species: Species
+		def species: String
+		def sym: Char
+
+		// Seems like there should be a better way to do 
+		// the following
+		def isAnimal: Boolean = 
+			this match {
+				case Animal(_, _) => true
+				case _ => false
+			}
+
+		def isPlant: Boolean = 
+			this match {
+				case Plant(_, _, _) => true
+				case _ => false
+			}
+
 		def isTerrain: Boolean = 
 			this match {
-				case Terrain(s) => true
+				case Terrain(_, _) => true
 				case _ => false
 			}
 	}
-	final case class Terrain(species: Species) extends Entity
-	final case class Animal(species: Species) extends Entity
-	final case class Plant(species: Species) extends Entity
+	final case class Terrain(species: String, sym: Char) extends Entity
+	final case class Animal(species: String, sym: Char) extends Entity
+	final case class Plant(species: String, sym: Char, size: Int) extends Entity
 
 	final case class Species(name: String, sym: Char)
 
@@ -25,34 +41,36 @@ object Main extends App {
 		clearScreen
 		println(
 			gmap.transpose.map(
-				row => row.map(e => e.species.sym).mkString
+				row => row.map(e => e.sym).mkString
 			).mkString("\n")
 		)
 		println()
 	}
 
 	def update(gmap: Map): Map = {
-		gmap
+		val newMap = gmap.clone
+		newMap
 	}
 
 	def initialize: Map = {
-		val gmap : Map = Array.fill(w, h)(Terrain(Species("dirt", '.')))
+		val gmap : Map = Array.fill(w, h)(Terrain("dirt", '.'))
 
-		gmap(5)(10) = Animal(Species("herbivore", 'H'))
-		gmap(25)(5) = Animal(Species("herbivore", 'H'))
+		gmap(5)(10) = Animal("herbivore", 'H')
+		gmap(25)(5) = Animal("herbivore", 'H')
 
 		// Check if we can generate a plant in this spot and randomly decide if 
 		// a plant should be generated here
-		def genPlant(i: Int, j: Int) : Boolean = {
-			val plantChance = .05
-			gmap(i)(j).isTerrain && scala.util.Random.nextFloat < plantChance
+		val initPlantSize = 5
+		val plantChance = .05
+		def genPlant(e: Entity) : Entity = {
+			val r = scala.util.Random.nextFloat
+			if (e.isTerrain && r < plantChance) 
+				Plant("bush", 'b', initPlantSize)
+			else 
+				e
 		}
 
-		val plants = 
-			for (i <- 0 until w; j <- 0 until h)
-				if (genPlant(i, j)) gmap(i)(j) = Plant(Species("bush", 'b'))
-
-		gmap
+		gmap.map(row => row.map(e => genPlant(e)))
 	}
 
 	// Put this stuff in more reasonable places!
@@ -64,6 +82,7 @@ object Main extends App {
 		n <x>: advance x steps in sim (showing 1 step per second)
 		r: run simulation until stopped
 		q: quit simulation
+		t: print table of info of all non-terrain entities
 		get <x> <y>: display info about the entity at (x,y)
 	"""
 
@@ -86,6 +105,7 @@ object Main extends App {
 				case nextRegex(x) => gameLoop(gmap, x.toInt)
 				case "n" => gameLoop(update(gmap))
 				case "r" => println("Not yet implemented"); getInput // IMPLEMENT
+				case "t" => println("Not yet implemented"); getInput // IMPLEMENT					
 				case getRegex(x,y) => println(getInfo(x.toInt,y.toInt)); getInput // sketchy toInt?
 				case "q" => ()
 				case _ => println("Input not recognized; use help for a list of commands."); getInput
@@ -96,14 +116,12 @@ object Main extends App {
 		getInput
 	}
 
+	// If n isn't a positive number, will just show one screen
 	def gameLoop(gmap: Map, n: Int) : Unit = {
-		assert(n > 0)
-		draw(gmap)
 		Thread.sleep(1000)
-		if (n == 1)
-			gameLoop(update(gmap))
-		else
-			gameLoop(update(gmap), n-1)
+		val newMap = update(gmap)
+		if (n > 1) gameLoop(newMap, n-1)
+		else gameLoop(newMap)
 	}
 
 	gameLoop(initialize)
