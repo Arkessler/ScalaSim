@@ -28,8 +28,6 @@ object Main extends App {
 	final case class Animal(species: String, sym: Char) extends Entity
 	final case class Plant(species: String, sym: Char, size: Int) extends Entity
 
-	final case class Species(name: String, sym: Char)
-
 	type Map = Array[Array[Entity]]
 
 	val w = 30
@@ -62,13 +60,12 @@ object Main extends App {
 		// a plant should be generated here
 		val initPlantSize = 5
 		val plantChance = .05
-		def genPlant(e: Entity) : Entity = {
-			val r = scala.util.Random.nextFloat
-			if (e.isTerrain && r < plantChance) 
+		var r = scala.util.Random
+		def genPlant(e: Entity) : Entity =
+			if (e.isTerrain && r.nextFloat < plantChance) 
 				Plant("bush", 'b', initPlantSize)
 			else 
 				e
-		}
 
 		gmap.map(row => row.map(e => genPlant(e)))
 	}
