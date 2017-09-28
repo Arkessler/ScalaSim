@@ -72,9 +72,10 @@ object Main extends App {
 		// if that's out of bounds.
 		def getInfo (x: Int, y: Int) : String = {
 			if (x >= w || y >= h || x < 0 || y < 0)
-				s"Location (${x}, ${y}) out of bounds"
+				s"Location ($x, $y) out of bounds"
 			else
-				s"At (${x}, ${y}):"
+				// IMPLEMENT
+				s"At ($x, $y):"
 		}
 
 		// Read command input from the user
