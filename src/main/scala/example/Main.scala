@@ -30,10 +30,9 @@ object Main extends App {
 
 	type Map = Array[Array[(Entity)]]
 
-	// Probably make these non-global at some point
-	val w = 30
-	val h = 15
+	// Probably make some of these non-global at some point
 	var r = scala.util.Random
+	val maxPlantSize = 5
 
 	def clearScreen = print("\u001b[2J")
 
@@ -47,53 +46,65 @@ object Main extends App {
 		println()
 	}
 
-	def checkBounds(l: (Int,Int)) = {
-		val (x, y) = l
-		// val (w, h) = (gmap.length, gmap(0).length)
-		(x >= 0 && x < w) && (y >= 0 && y < h)
-	}
-
 	def update(gmap: Map): Map = {
-		val oldPlants : List[Plant] = gmap.flatten.filter(_.isPlant).map(_.asInstanceOf[Plant]).toList
-		val oldHerbs : List[Animal] = gmap.flatten.filter(_.isAnimal).map(_.asInstanceOf[Animal]).toList
+		val (w, h) = (gmap.length, gmap(0).length)
+
+		// TODO: Weird w/h reversal stuff
+		def checkBounds(l: (Int,Int)) = {
+			val (x, y) = l
+			(x >= 0 && x < w) && (y >= 0 && y < h)
+		}
 
 		// Get adjacent locations that satisfy the valid parameter
 		def getValidAdj(currLoc: (Int,Int), valid: (Int,Int) => Boolean) = {
 			val (x, y) = currLoc
-			val locs = List((x+1, y), (x-1, y), (x, y+1), (x, y-1))
+			val locs = List( (x+1, y), (x-1, y), (x, y+1), (x, y-1) )
 			locs.filter { case (x,y) => valid(x,y) }
 		}
 
+		val oldPlants : List[Plant] = gmap.flatten.filter(_.isPlant).map(_.asInstanceOf[Plant]).toList
+		val oldHerbs : List[Animal] = gmap.flatten.filter(_.isAnimal).map(_.asInstanceOf[Animal]).toList
+
 		// Plants currently get eaten in a circle by herbivores
 		val newPlants = 
-			oldPlants.filter( (p: Plant) => {
-				getValidAdj(p.loc, (i:Int, j:Int) => {
+			oldPlants.map((p: Plant) => {
+				val adjHerbs = getValidAdj(p.loc, (i:Int, j:Int) => {
 					checkBounds(i,j) && gmap(i)(j).species == "herbivore"
-				}).isEmpty
-			})
+				})
+				
+				val newSize = 
+					if (adjHerbs.isEmpty) 
+						if (p.size < maxPlantSize) p.size + 1 
+						else p.size
+					else p.size - adjHerbs.length
+
+				// To Implement: Randomly generate new plants
+
+				if (newSize <= maxPlantSize/2)
+					p.copy(size = newSize, sym = p.sym.toLower)
+				else 
+					p.copy(size = newSize, sym = p.sym.toUpper)
+			}).filter(_.size > 0)
 
 		val newHerbs =
 			oldHerbs.foldLeft(List.empty : List[Animal])((newHerbs : List[Animal], h : Animal) => {
-
-				// Check for adjacent plants (and eat them)
-				val plantLocs = getValidAdj(h.loc, (i:Int, j:Int) => {
+				// Stay next to adjacent plants
+				val plantLocs = getValidAdj(h.loc, (i:Int, j:Int) =>
 					 checkBounds(i,j) && gmap(i)(j).isPlant
-				})
-				if (!plantLocs.isEmpty) h :: newHerbs
+				)
+				if (!plantLocs.isEmpty) h :: newHerbs else {
+					// Randomly move to an empty adjacent location
+					val validLocs = getValidAdj(h.loc, (i:Int, j:Int) => {
+						val newLocs = newHerbs.map(_.loc)
+						checkBounds(i,j) && gmap(i)(j).isTerrain && !newLocs.contains((i,j))
+					})
 
-				// Randomly move to an empty adjacent location
-				val validLocs = getValidAdj(h.loc, (i:Int, j:Int) => {
-					val newLocs = newHerbs.map(_.loc)
-					checkBounds(i,j) && gmap(i)(j).isTerrain && (!newLocs.contains((i,j)))
-				})
-
-				if (!validLocs.isEmpty) {
-					val rand = r.nextInt(validLocs.length)
-					h.copy(loc = validLocs(rand)) :: newHerbs
+					if (!validLocs.isEmpty) {
+						val rand = r.nextInt(validLocs.length)
+						h.copy(loc = validLocs(rand)) :: newHerbs
+					}
+					else h :: newHerbs
 				}
-				else
-					h :: newHerbs
-
 			})
 
 		Array.tabulate(w, h)((x, y) => {
@@ -110,15 +121,19 @@ object Main extends App {
 	def initialize: Map = {
 		// Check if we can generate a plant in this spot and randomly decide if 
 		// a plant should be generated here
-		val initPlantSize = 5
+		val initW = 30
+		val initH = 15
 		val plantChance = .05
 		val herbivoreLocations = List((5,10), (25,5), (3,3), (4,4), (5,5), (20, 8))
 
-		Array.tabulate(w, h)((x, y) =>
+		assert(initW > 0)
+		assert(initH > 0)
+		Array.tabulate(initW, initH)((x, y) =>
 			if (herbivoreLocations.contains((x, y)))
 				Animal("herbivore", 'H', (x, y))
 			else if (r.nextFloat < plantChance) 
-				Plant("bush", 'O', initPlantSize, (x, y)) 
+				// randomize initial size
+				Plant("bush", 'O', maxPlantSize, (x, y)) 
 			else 
 				Terrain("dirt", '.', (x, y))
 		)
@@ -142,6 +157,7 @@ object Main extends App {
 		// Shows info about the object at (x,y) or an error
 		// if that's out of bounds.
 		def getInfo (x: Int, y: Int) : String = {
+			val (w, h) = (gmap.length, gmap(0).length)
 			if (x >= w || y >= h || x < 0 || y < 0)
 				s"Location ($x, $y) out of bounds"
 			else
