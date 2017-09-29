@@ -192,7 +192,7 @@ object Main extends App {
 		// if that's out of bounds.
 		def getInfo (x: Int, y: Int) : String = {
 			val (w, h) = (gmap.length, gmap(0).length)
-			if (x+1 >= w || y+1 >= h || x < 1 || y < 1)
+			if (x+1 >= w || y+1g >= h || x < 1 || y < 1)
 				s"Location ($x, $y) out of bounds"
 			else {
 				val info = 
@@ -204,6 +204,8 @@ object Main extends App {
 				s"At ($x, $y):\n $info"
 			}
 		}
+		
+		draw(gmap)
 
 		// Read command input from the user
 		def getInput : Unit = {
@@ -221,7 +223,6 @@ object Main extends App {
 			}
 		}
 
-		draw(gmap)
 		getInput
 	}
 
