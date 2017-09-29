@@ -192,19 +192,19 @@ object Main extends App {
 		// if that's out of bounds.
 		def getInfo (x: Int, y: Int) : String = {
 			val (w, h) = (gmap.length, gmap(0).length)
-			if (x+1 >= w || y+1g >= h || x < 1 || y < 1)
-				s"Location ($x, $y) out of bounds"
+			if (x > w || y > h || x-1 < 0 || y-1 < 0)
+				s"Location ($x+1, $y+1) out of bounds"
 			else {
 				val info = 
-					gmap(x+1)(y+1) match {
+					gmap(x-1)(y-1) match {
 						case Terrain(_,_,_) => s"A sad empty patch of dirt."
-						case Plant(s,_,z,_) => s"A plant! This is a $s of size $z"
+						case Plant(s,_,z,_) => s"A plant! This is a $s of size $z."
 						case Animal(s,_,_,e) => s"An animal! This is a $s that has eaten $e times."
 					}
 				s"At ($x, $y):\n $info"
 			}
 		}
-		
+
 		draw(gmap)
 
 		// Read command input from the user
