@@ -30,6 +30,7 @@ object Main extends App {
 
 	type Map = Array[Array[(Entity)]]
 
+	// Probably make these non-global at some point
 	val w = 30
 	val h = 15
 	var r = scala.util.Random
@@ -46,32 +47,53 @@ object Main extends App {
 		println()
 	}
 
+	def checkBounds(l: (Int,Int)) = {
+		val (x, y) = l
+		// val (w, h) = (gmap.length, gmap(0).length)
+		(x >= 0 && x < w) && (y >= 0 && y < h)
+	}
+
 	def update(gmap: Map): Map = {
-		// val newMap = Array.fill(w, h)(Terrain("dirt", '.'))
 		val oldPlants : List[Plant] = gmap.flatten.filter(_.isPlant).map(_.asInstanceOf[Plant]).toList
 		val oldHerbs : List[Animal] = gmap.flatten.filter(_.isAnimal).map(_.asInstanceOf[Animal]).toList
 
-		def getValidAdj( currLoc:(Int,Int), newLocations: List[(Int, Int)]) :  List[(Int,Int)] = {
+		// Get adjacent locations that satisfy the valid parameter
+		def getValidAdj(currLoc: (Int,Int), valid: (Int,Int) => Boolean) = {
 			val (x, y) = currLoc
 			val locs = List((x+1, y), (x-1, y), (x, y+1), (x, y-1))
-			locs.filter(l => {
-					val (i, j) = l
-					val (w, h) = (gmap.length, gmap(0).length)
-					(i >= 0 && i < w) && (j >= 0 && j < h) && 
-						gmap(i)(j).isTerrain && (!newLocations.contains(l))
-				}
-			)
+			locs.filter { case (x,y) => valid(x,y) }
 		}
 
+		// Plants currently get eaten in a circle by herbivores
+		val newPlants = 
+			oldPlants.filter( (p: Plant) => {
+				getValidAdj(p.loc, (i:Int, j:Int) => {
+					checkBounds(i,j) && gmap(i)(j).species == "herbivore"
+				}).isEmpty
+			})
+
 		val newHerbs =
-			oldHerbs.foldLeft(List.empty : List[Animal])((newHerbivores : List[Animal], h : Animal) => {
-				val validLocs = getValidAdj(h.loc, newHerbivores.map(_.loc))
-				if (validLocs.length != 0) {
+			oldHerbs.foldLeft(List.empty : List[Animal])((newHerbs : List[Animal], h : Animal) => {
+
+				// Check for adjacent plants (and eat them)
+				val plantLocs = getValidAdj(h.loc, (i:Int, j:Int) => {
+					 checkBounds(i,j) && gmap(i)(j).isPlant
+				})
+				if (!plantLocs.isEmpty) h :: newHerbs
+
+				// Randomly move to an empty adjacent location
+				val validLocs = getValidAdj(h.loc, (i:Int, j:Int) => {
+					val newLocs = newHerbs.map(_.loc)
+					checkBounds(i,j) && gmap(i)(j).isTerrain && (!newLocs.contains((i,j)))
+				})
+
+				if (!validLocs.isEmpty) {
 					val rand = r.nextInt(validLocs.length)
-					h.copy(loc = validLocs(rand)) :: newHerbivores
+					h.copy(loc = validLocs(rand)) :: newHerbs
 				}
 				else
-					h :: newHerbivores
+					h :: newHerbs
+
 			})
 
 		Array.tabulate(w, h)((x, y) => {
@@ -79,7 +101,7 @@ object Main extends App {
 			if (newHerbs.map(_.loc).contains((x, y)))
 				newHerbs.find(_.loc == (x,y)).getOrElse(dirt)
 			else if (oldPlants.map(_.loc).contains((x,y))) 
-				oldPlants.find(_.loc == (x,y)).getOrElse(dirt)
+				newPlants.find(_.loc == (x,y)).getOrElse(dirt)
 			else 
 				dirt
 		})		
@@ -96,7 +118,7 @@ object Main extends App {
 			if (herbivoreLocations.contains((x, y)))
 				Animal("herbivore", 'H', (x, y))
 			else if (r.nextFloat < plantChance) 
-				Plant("bush", 'b', initPlantSize, (x, y)) 
+				Plant("bush", 'O', initPlantSize, (x, y)) 
 			else 
 				Terrain("dirt", '.', (x, y))
 		)
