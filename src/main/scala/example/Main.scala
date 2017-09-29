@@ -1,37 +1,38 @@
 object Main extends App {
-
 	sealed trait Entity {
 		def species: String
 		def sym: Char
+		def loc: (Int,Int)
 
 		// Seems like there should be a better way to do 
 		// the following
 		def isAnimal: Boolean = 
 			this match {
-				case Animal(_, _) => true
+				case Animal(_, _, _) => true
 				case _ => false
 			}
 
 		def isPlant: Boolean = 
 			this match {
-				case Plant(_, _, _) => true
+				case Plant(_, _, _, _) => true
 				case _ => false
 			}
 
 		def isTerrain: Boolean = 
 			this match {
-				case Terrain(_, _) => true
+				case Terrain(_, _, _) => true
 				case _ => false
 			}
 	}
-	final case class Terrain(species: String, sym: Char) extends Entity
-	final case class Animal(species: String, sym: Char) extends Entity
-	final case class Plant(species: String, sym: Char, size: Int) extends Entity
+	final case class Terrain(species: String, sym: Char, loc: (Int,Int)) extends Entity
+	final case class Animal(species: String, sym: Char, loc: (Int,Int)) extends Entity
+	final case class Plant(species: String, sym: Char, size: Int, loc: (Int,Int)) extends Entity
 
-	type Map = Array[Array[Entity]]
+	type Map = Array[Array[(Entity)]]
 
 	val w = 30
 	val h = 15
+	var r = scala.util.Random
 
 	def clearScreen = print("\u001b[2J")
 
@@ -46,28 +47,59 @@ object Main extends App {
 	}
 
 	def update(gmap: Map): Map = {
-		val newMap = gmap.clone
-		newMap
+		// val newMap = Array.fill(w, h)(Terrain("dirt", '.'))
+		val oldPlants : List[Plant] = gmap.flatten.filter(_.isPlant).map(_.asInstanceOf[Plant]).toList
+		val oldHerbs : List[Animal] = gmap.flatten.filter(_.isAnimal).map(_.asInstanceOf[Animal]).toList
+
+		def getValidAdj( currLoc:(Int,Int), newLocations: List[(Int, Int)]) :  List[(Int,Int)] = {
+			val (x, y) = currLoc
+			val locs = List((x+1, y), (x-1, y), (x, y+1), (x, y-1))
+			locs.filter(l => {
+					val (i, j) = l
+					val (w, h) = (gmap.length, gmap(0).length)
+					(i >= 0 && i < w) && (j >= 0 && j < h) && 
+						gmap(i)(j).isTerrain && (!newLocations.contains(l))
+				}
+			)
+		}
+
+		val newHerbs =
+			oldHerbs.foldLeft(List.empty : List[Animal])((newHerbivores : List[Animal], h : Animal) => {
+				val validLocs = getValidAdj(h.loc, newHerbivores.map(_.loc))
+				if (validLocs.length != 0) {
+					val rand = r.nextInt(validLocs.length)
+					h.copy(loc = validLocs(rand)) :: newHerbivores
+				}
+				else
+					h :: newHerbivores
+			})
+
+		Array.tabulate(w, h)((x, y) => {
+			val dirt = Terrain("dirt", '.', (x, y))
+			if (newHerbs.map(_.loc).contains((x, y)))
+				newHerbs.find(_.loc == (x,y)).getOrElse(dirt)
+			else if (oldPlants.map(_.loc).contains((x,y))) 
+				oldPlants.find(_.loc == (x,y)).getOrElse(dirt)
+			else 
+				dirt
+		})		
 	}
 
 	def initialize: Map = {
-		val gmap : Map = Array.fill(w, h)(Terrain("dirt", '.'))
-
-		gmap(5)(10) = Animal("herbivore", 'H')
-		gmap(25)(5) = Animal("herbivore", 'H')
-
 		// Check if we can generate a plant in this spot and randomly decide if 
 		// a plant should be generated here
 		val initPlantSize = 5
 		val plantChance = .05
-		var r = scala.util.Random
-		def genPlant(e: Entity) : Entity =
-			if (e.isTerrain && r.nextFloat < plantChance) 
-				Plant("bush", 'b', initPlantSize)
-			else 
-				e
+		val herbivoreLocations = List((5,10), (25,5), (3,3), (4,4), (5,5), (20, 8))
 
-		gmap.map(row => row.map(e => genPlant(e)))
+		Array.tabulate(w, h)((x, y) =>
+			if (herbivoreLocations.contains((x, y)))
+				Animal("herbivore", 'H', (x, y))
+			else if (r.nextFloat < plantChance) 
+				Plant("bush", 'b', initPlantSize, (x, y)) 
+			else 
+				Terrain("dirt", '.', (x, y))
+		)
 	}
 
 	// Put this stuff in more reasonable places!
@@ -80,6 +112,7 @@ object Main extends App {
 		r: run simulation until stopped
 		q: quit simulation
 		t: print table of info of all non-terrain entities
+		i: reinitialize map
 		get <x> <y>: display info about the entity at (x,y)
 	"""
 
@@ -102,7 +135,8 @@ object Main extends App {
 				case nextRegex(x) => gameLoop(gmap, x.toInt)
 				case "n" => gameLoop(update(gmap))
 				case "r" => println("Not yet implemented"); getInput // IMPLEMENT
-				case "t" => println("Not yet implemented"); getInput // IMPLEMENT					
+				case "t" => println("Not yet implemented"); getInput // IMPLEMENT
+				case "i" => gameLoop(initialize)				
 				case getRegex(x,y) => println(getInfo(x.toInt,y.toInt)); getInput // sketchy toInt?
 				case "q" => ()
 				case _ => println("Input not recognized; use help for a list of commands."); getInput
@@ -113,10 +147,21 @@ object Main extends App {
 		getInput
 	}
 
+	def waitRestOfSecond(interval: Long) = {
+		val waitTime = 1000000000 - interval
+		Thread.sleep(waitTime/1000000)
+	}
+
 	// If n isn't a positive number, will just show one screen
 	def gameLoop(gmap: Map, n: Int) : Unit = {
-		Thread.sleep(1000)
+		val startTime = System.nanoTime()
+		
 		val newMap = update(gmap)
+		draw(newMap)
+
+		val interval = System.nanoTime() - startTime
+		waitRestOfSecond(interval)
+
 		if (n > 1) gameLoop(newMap, n-1)
 		else gameLoop(newMap)
 	}
