@@ -8,7 +8,7 @@ object Main extends App {
 		// the following
 		def isAnimal: Boolean = 
 			this match {
-				case Animal(_, _, _) => true
+				case Animal(_, _, _, _) => true
 				case _ => false
 			}
 
@@ -25,7 +25,8 @@ object Main extends App {
 			}
 	}
 	final case class Terrain(species: String, sym: Char, loc: (Int,Int)) extends Entity
-	final case class Animal(species: String, sym: Char, loc: (Int,Int)) extends Entity
+	// eaten should be replaced by an object stats
+	final case class Animal(species: String, sym: Char, loc: (Int,Int), eaten: Int = 0) extends Entity
 	final case class Plant(species: String, sym: Char, size: Int, loc: (Int,Int)) extends Entity
 
 	type Map = Array[Array[(Entity)]]
@@ -68,8 +69,8 @@ object Main extends App {
 		}
 
 		val oldPlants = gmap.flatten.collect{ case p @ Plant(_,_,_,_) => p }.toList
-		val oldHerbs = gmap.flatten.collect{ case h @ Animal("herbivore",_,_) => h }.toList
-		val oldCarns = gmap.flatten.collect{ case c @ Animal("carnivore",_,_) => c }.toList
+		val oldHerbs = gmap.flatten.collect{ case h @ Animal("herbivore",_,_,_) => h }.toList
+		val oldCarns = gmap.flatten.collect{ case c @ Animal("carnivore",_,_,_) => c }.toList
 
 		// Plants currently get eaten "in a circle" by herbivores
 		val updatedPlants = 
@@ -119,7 +120,9 @@ object Main extends App {
 				val plantLocs = getConditionalAdj(h.loc, (i:Int, j:Int) =>
 					 checkBounds(i,j) && gmap(i)(j).isPlant
 				)
-				if (!plantLocs.isEmpty) h :: newHs else {
+				if (!plantLocs.isEmpty) 
+					h.copy(eaten = h.eaten + plantLocs.length) :: newHs 
+				else {
 					// Randomly move to an empty adjacent location
 					val validLocs = getConditionalAdj(h.loc, (i:Int, j:Int) => {
 						val newLocs = newHs.map(_.loc)
@@ -189,11 +192,17 @@ object Main extends App {
 		// if that's out of bounds.
 		def getInfo (x: Int, y: Int) : String = {
 			val (w, h) = (gmap.length, gmap(0).length)
-			if (x >= w || y >= h || x < 0 || y < 0)
+			if (x+1 >= w || y+1 >= h || x < 1 || y < 1)
 				s"Location ($x, $y) out of bounds"
-			else
-				// IMPLEMENT
-				s"At ($x, $y):"
+			else {
+				val info = 
+					gmap(x+1)(y+1) match {
+						case Terrain(_,_,_) => s"A sad empty patch of dirt."
+						case Plant(s,_,z,_) => s"A plant! This is a $s of size $z"
+						case Animal(s,_,_,e) => s"An animal! This is a $s that has eaten $e times."
+					}
+				s"At ($x, $y):\n $info"
+			}
 		}
 
 		// Read command input from the user
